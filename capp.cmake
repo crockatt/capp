@@ -650,6 +650,12 @@ function(capp_install)
   set(cmakelists_path "${source_directory}/CMakeLists.txt")
   set(setup_path "${source_directory}/setup.py")
   set(pyproject_path "${source_directory}/pyproject.toml")
+  if (NOT EXISTS "${cmakelists_path}"
+      AND NOT EXISTS "${setup_path}"
+      AND NOT EXISTS "${pyproject_path}")
+    set(${capp_install_RESULT_VARIABLE} -1 PARENT_SCOPE)
+    message("CApp: none of the following exist:\n${cmakelists_path}\n${setup_path}\n${pyproject_path}")
+  endif()
   if (EXISTS "${cmakelists_path}")
     capp_execute(
         COMMAND
@@ -662,9 +668,10 @@ function(capp_install)
         RESULT_VARIABLE cmake_install_result
     )
     set(${capp_install_RESULT_VARIABLE} "${cmake_install_result}" PARENT_SCOPE)
-  elseif(EXISTS "${setup_path}" OR EXISTS "${pyproject_path}")
+  endif()
+  if(EXISTS "${setup_path}" OR EXISTS "${pyproject_path}")
     capp_ensure_venv()
-    message("CApp: Installing ${capp_install_PACKAGE} using pip")
+    message("\nCApp: Installing ${capp_install_PACKAGE} using pip")
     set(cmd_list
         "${CAPP_VENV_ROOT}/bin/pip"
         install
@@ -697,9 +704,6 @@ function(capp_install)
     if (NOT pip_result EQUAL 0)
       message("CApp: failed to install ${capp_install_PACKAGE} with pip\ncommand: ${cmd_string}\n")
     endif()
-  else()
-    set(${capp_install_RESULT_VARIABLE} -1 PARENT_SCOPE)
-    message("CApp: none of the following exist:\n${cmakelists_path}\n${setup_path}")
   endif()
 endfunction()
 
@@ -2001,11 +2005,16 @@ elseif(CAPP_COMMAND STREQUAL "clean")
       message("CApp: removing ${source_directory}/build")
       file(REMOVE_RECURSE "${source_directory}/build")
     endif()
-    set(egg_path "${source_directory}/src/${root_package}.egg-info")
-    if(EXISTS "${egg_path}")
+    # Find *.egg-info subdirectories throughout packages source tree and delete them.
+    file(GLOB_RECURSE egg_paths
+      LIST_DIRECTORIES true
+      "${source_directory}/*.egg-info"
+    )
+    list(FILTER egg_paths INCLUDE REGEX "^${source_directory}/.*\.egg-info$")
+    foreach(egg_path ${egg_paths})
       message("CApp: removing ${egg_path}")
       file(REMOVE_RECURSE "${egg_path}")
-    endif()
+    endforeach()
   endforeach()
   set(capp_command_result 0)
 elseif(CAPP_COMMAND STREQUAL "pre-commit")
