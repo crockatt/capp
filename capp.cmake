@@ -30,6 +30,23 @@ function(capp_list_to_string)
   set(${capp_list_to_string_STRING} "${str}" PARENT_SCOPE)
 endfunction()
 
+function(capp_set_git_clone_flags)
+  set(all_clone_flags "--recursive")
+  # Options if shallow clone enabled.
+  set(shallow_clone_flags "--depth" "1")
+  # Determine clone type.
+  set(capp_shallow_clone true)
+  if (DEFINED ENV{CAPP_SHALLOW_CLONE})
+    set(capp_shallow_clone $ENV{CAPP_SHALLOW_CLONE})
+  endif()
+  # Set desired clone flags.
+  if (${capp_shallow_clone})
+    set(capp_git_clone_flags ${all_clone_flags} ${shallow_clone_flags} PARENT_SCOPE)
+  else()
+    set(capp_git_clone_flags ${all_clone_flags} PARENT_SCOPE)
+  endif()
+endfunction()
+
 function(capp_get_subdirectories result curdir)
   file(GLOB children RELATIVE "${curdir}" "${curdir}/*")
   set(dirlist "")
@@ -465,12 +482,13 @@ endfunction()
 function(capp_clone)
   cmake_parse_arguments(PARSE_ARGV 0 capp_clone "" "PACKAGE;RESULT_VARIABLE" "")
   file(MAKE_DIRECTORY "${CAPP_SOURCE_ROOT}")
+  capp_set_git_clone_flags()
   set(cmd_list
       "${GIT_EXECUTABLE}"
-      clone --depth 1
+      clone ${capp_git_clone_flags}
       "${${capp_clone_PACKAGE}_GIT_URL}"
       ${capp_clone_PACKAGE})
-  message("\nCApp: shallow cloning ${capp_clone_PACKAGE} from ${${capp_clone_PACKAGE}_GIT_URL}\n")
+  message("\nCApp: cloning ${capp_clone_PACKAGE} from ${${capp_clone_PACKAGE}_GIT_URL}\n")
   capp_execute(
     COMMAND ${cmd_list}
     WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}"
@@ -479,7 +497,7 @@ function(capp_clone)
     )
   if (NOT git_clone_result EQUAL 0)
     capp_list_to_string(LIST cmd_list STRING cmd_string)
-    message("\nCApp: shallow clone of ${capp_clone_PACKAGE} failed.\nCommand was: ${cmd_string}\n")
+    message("\nCApp: clone of ${capp_clone_PACKAGE} failed.\nCommand was: ${cmd_string}\n")
     file(REMOVE_RECURSE "${CAPP_SOURCE_ROOT}/${capp_clone_PACKAGE}")
     set(${capp_clone_RESULT_VARIABLE} "${git_clone_result}" PARENT_SCOPE)
     return()
@@ -1196,8 +1214,9 @@ endfunction()
 function(capp_clone_command)
   cmake_parse_arguments(PARSE_ARGV 0 capp_clone_command "" "RESULT_VARIABLE" "GIT_ARGUMENTS")
   file(MAKE_DIRECTORY "${CAPP_SOURCE_ROOT}")
+  capp_set_git_clone_flags()
   capp_execute(
-    COMMAND "${GIT_EXECUTABLE}" clone --depth 1 --recursive
+    COMMAND "${GIT_EXECUTABLE}" clone ${capp_git_clone_flags}
             ${capp_clone_command_GIT_ARGUMENTS}
     WORKING_DIRECTORY "${CAPP_SOURCE_ROOT}"
     RESULT_VARIABLE git_clone_result
@@ -1206,7 +1225,7 @@ function(capp_clone_command)
   )
   if (NOT git_clone_result EQUAL 0)
     capp_list_to_string(LIST capp_clone_command_GIT_ARGUMENTS STRING arg_string)
-    message("CApp: git clone --depth 1 --recursive ${arg_string} failed:\n${git_clone_output}\n${git_clone_error}")
+    message("CApp: git clone ${capp_git_clone_flags} ${arg_string} failed:\n${git_clone_output}\n${git_clone_error}")
     set(${capp_clone_command_RESULT_VARIABLE} ${git_clone_result} PARENT_SCOPE)
     return()
   endif()
